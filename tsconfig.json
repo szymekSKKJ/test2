@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "checkJs": true,
+    "strictNullChecks": true,
+    "allowJs": true,
+    "noEmit": true
+  },
+  "include": ["**/*.js"]
+}
