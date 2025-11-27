@@ -57,38 +57,6 @@ const createScheduler = () => {
   return { schedule };
 };
 
-/**
- * @param {() => Array<any>} sourceSignal
- * @param {(item, index) => Node} mapFn
- * @param {(item) => any} keyFn
- */
-export const mapSignal = (sourceSignal, mapFn, keyFn) => {
-  let cache = new Map();
-
-  return () => {
-    const items = sourceSignal();
-    const newCache = new Map();
-    const result = [];
-
-    items.forEach((item, index) => {
-      const key = keyFn(item);
-      let node;
-
-      if (cache.has(key)) {
-        node = cache.get(key);
-      } else {
-        node = mapFn(item, index);
-      }
-
-      newCache.set(key, node);
-      result.push(node);
-    });
-
-    cache = newCache;
-    return result;
-  };
-};
-
 const scheduler = createScheduler();
 
 /**
@@ -172,27 +140,37 @@ export const createElement = (tagName, props = {}, children = []) => {
 
   const key = props.key;
   delete props.key;
-  if (key != null) el._key = key;
+
+  if (key !== null) {
+    el._key = key;
+  }
 
   Object.entries(props).forEach(([key, value]) => {
     if (key.startsWith("on") && typeof value === "function") {
       el.addEventListener(key.slice(2).toLowerCase(), value);
     } else if (key === "style" && typeof value === "object") {
-      Object.entries(value).forEach(([styleKey, styleVal]) => {
+      Object.entries(value).forEach(([key, value]) => {
         if (typeof styleVal === "function") {
-          subscribe(() => (el.style[styleKey] = styleVal()));
+          subscribe(() => {
+            el.style[key] = styleVal();
+          });
         } else {
-          el.style[styleKey] = styleVal;
+          el.style[key] = value;
         }
       });
     } else {
-      const apply = (val) => {
-        if (key in el) el[key] = val;
-        else el.setAttribute(key, val);
+      const apply = (value) => {
+        if (key in el) {
+          el[key] = value;
+        } else {
+          el.setAttribute(key, value);
+        }
       };
 
       if (typeof value === "function") {
-        subscribe(() => apply(value()));
+        subscribe(() => {
+          apply(value());
+        });
       } else {
         apply(value);
       }
@@ -200,80 +178,80 @@ export const createElement = (tagName, props = {}, children = []) => {
   });
 
   const appendChildRecursive = (child) => {
-    if (child === null) return;
+    if (child !== null) {
+      if (typeof child === "function") {
+        let nodeCache = new Map();
+        let mountedNodes = [];
 
-    if (typeof child === "function") {
-      const placeholder = document.createComment("dynamic-child");
-      el.appendChild(placeholder);
+        const initialAnchor = el.lastChild;
 
-      let nodeCache = new Map();
-      let mountedNodes = [];
-
-      const render = () => {
-        const value = child();
-
-        const rawNodes = Array.isArray(value) ? value : [value];
-        const newCandidates = rawNodes.map((val) => {
-          if (val instanceof Node) return val;
-          return document.createTextNode(String(val));
-        });
-
-        const nextNodeCache = new Map();
-        const finalNodes = [];
-
-        newCandidates.forEach((candidate) => {
-          const candidateKey = candidate._key;
-
-          if (candidateKey != null) {
-            let nodeToUse = candidate;
-
-            if (nodeCache.has(candidateKey)) {
-              nodeToUse = nodeCache.get(candidateKey);
+        const render = () => {
+          const value = child();
+          const rawNodes = Array.isArray(value) ? value : [value];
+          const newCandidates = rawNodes.map((element) => {
+            if (element instanceof Node) {
+              return element;
+            } else {
+              return document.createTextNode(String(element));
             }
+          });
 
-            nextNodeCache.set(candidateKey, nodeToUse);
-            finalNodes.push(nodeToUse);
-          } else {
-            finalNodes.push(candidate);
-          }
-        });
+          const nextNodeCache = new Map();
+          const finalNodes = [];
 
-        const finalNodeSet = new Set(finalNodes);
+          newCandidates.forEach((candidate) => {
+            const candidateKey = candidate._key;
 
-        mountedNodes.forEach((node) => {
-          if (!finalNodeSet.has(node)) {
-            node.remove();
-          }
-        });
+            if (candidateKey !== null) {
+              let nodeToUse = candidate;
 
-        let currentRef = placeholder;
+              if (nodeCache.has(candidateKey)) {
+                nodeToUse = nodeCache.get(candidateKey);
+              }
 
-        finalNodes.forEach((node) => {
-          if (currentRef.nextSibling !== node) {
-            currentRef.after(node);
-          }
-          currentRef = node;
-        });
+              nextNodeCache.set(candidateKey, nodeToUse);
+              finalNodes.push(nodeToUse);
+            } else {
+              finalNodes.push(candidate);
+            }
+          });
 
-        mountedNodes = finalNodes;
-        nodeCache = nextNodeCache;
-      };
+          const finalNodeSet = new Set(finalNodes);
 
-      subscribe(render);
-      return;
+          mountedNodes.forEach((node) => {
+            if (finalNodeSet.has(node) === false) {
+              node.remove();
+            }
+          });
+
+          let currentRef = initialAnchor;
+
+          finalNodes.forEach((node) => {
+            const nextSiblingInDOM = currentRef ? currentRef.nextSibling : el.firstChild;
+
+            if (nextSiblingInDOM !== node) {
+              if (currentRef === null) {
+                el.prepend(node);
+              } else {
+                currentRef.after(node);
+              }
+            }
+            currentRef = node;
+          });
+
+          mountedNodes = finalNodes;
+          nodeCache = nextNodeCache;
+        };
+
+        subscribe(render);
+      } else if (Array.isArray(child)) {
+        child.forEach(appendChildRecursive);
+      } else if (child instanceof Node) {
+        el.appendChild(child);
+      } else {
+        el.appendChild(document.createTextNode(child));
+      }
     }
-
-    if (Array.isArray(child)) {
-      child.forEach(appendChildRecursive);
-      return;
-    }
-
-    if (child instanceof Node) {
-      el.appendChild(child);
-      return;
-    }
-
-    el.appendChild(document.createTextNode(child));
   };
 
   children.forEach(appendChildRecursive);
