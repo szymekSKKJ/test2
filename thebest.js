@@ -202,7 +202,7 @@ export const createElement = (tagName, props = {}, children = []) => {
           newCandidates.forEach((candidate) => {
             const candidateKey = candidate._key;
 
-            if (candidateKey !== null) {
+            if (candidateKey != null) {
               let nodeToUse = candidate;
 
               if (nodeCache.has(candidateKey)) {
