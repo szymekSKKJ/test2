@@ -150,7 +150,7 @@ export const createEffect = (effect) => {
 
 const reconcileChildren = (el, childFn) => {
   const startMarker = document.createTextNode("");
-  const endMarker = document.createComment("reactive-end");
+  const endMarker = document.createTextNode("");
   el.appendChild(startMarker);
   el.appendChild(endMarker);
 
@@ -168,25 +168,22 @@ const reconcileChildren = (el, childFn) => {
       return document.createTextNode(String(element));
     });
 
-    if (newCandidates.length === 1 && newCandidates[0].nodeType === Node.TEXT_NODE) {
-      if (newCandidates[0] === startMarker) {
-        const textNode = startMarker;
-        const newText = String(rawCandidates[0]);
+    if (newCandidates.length === 0 || (newCandidates.length === 1 && newCandidates[0].nodeType === Node.TEXT_NODE && newCandidates[0] === startMarker)) {
+      const newText = newCandidates.length === 1 ? String(rawCandidates[0]) : "";
 
-        if (textNode.nodeValue !== newText) {
-          textNode.nodeValue = newText;
-        }
-
-        let current = textNode.nextSibling;
-        while (current && current !== endMarker) {
-          const next = current.nextSibling;
-          current.remove();
-          current = next;
-        }
-
-        mountedNodes = [textNode];
-        return;
+      if (startMarker.nodeValue !== newText) {
+        startMarker.nodeValue = newText;
       }
+
+      let current = startMarker.nextSibling;
+      while (current && current !== endMarker) {
+        const next = current.nextSibling;
+        current.remove();
+        current = next;
+      }
+
+      mountedNodes = [startMarker];
+      return;
     }
 
     const nextNodeCache = new Map();
@@ -211,7 +208,7 @@ const reconcileChildren = (el, childFn) => {
 
     const finalNodeSet = new Set(finalNodes);
     mountedNodes.forEach((node) => {
-      if (node !== startMarker && !finalNodeSet.has(node)) {
+      if (node !== startMarker && node !== endMarker && !finalNodeSet.has(node)) {
         node.remove();
       }
     });
