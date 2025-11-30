@@ -32,7 +32,6 @@ function cleanup(computation: Computation) {
   computation.deps.clear();
 }
 
-// --- Improved signal with automatic dependency tracking and batching ---
 const updateQueue = new Set<Computation>();
 let isFlushing = false;
 
@@ -76,80 +75,6 @@ const signal = <T>(initialValue: T): [() => T, (value: T) => void] => {
   return [get, set];
 };
 
-// --- Keyed reconciliation for patchElement children ---
-// Add optional `key` attribute support on elements
-function patchElement(oldEl: HTMLElement, newEl: HTMLElement) {
-  // ... (attributes and style patching as before) ...
-
-  // Patch attributes
-  Array.from(oldEl.attributes).forEach((attr) => {
-    if (!newEl.hasAttribute(attr.name)) oldEl.removeAttribute(attr.name);
-  });
-
-  Array.from(newEl.attributes).forEach((attr) => {
-    if (oldEl.getAttribute(attr.name) !== attr.value) {
-      oldEl.setAttribute(attr.name, attr.value);
-    }
-  });
-
-  if (oldEl.className !== newEl.className) oldEl.className = newEl.className;
-
-  oldEl.setAttribute("style", newEl.getAttribute("style") || "");
-
-  // --- Keyed child diffing ---
-  const oldChildren = Array.from(oldEl.childNodes);
-  const newChildren = Array.from(newEl.childNodes);
-
-  // Build map of keyed old children
-  const oldKeyed = new Map<string, Node>();
-  oldChildren.forEach((child) => {
-    if (child instanceof HTMLElement) {
-      const key = child.getAttribute("data-key");
-      if (key) oldKeyed.set(key, child);
-    }
-  });
-
-  // Build new list of nodes to insert
-  const newNodes: Node[] = [];
-
-  for (let i = 0; i < newChildren.length; i++) {
-    const newChild = newChildren[i];
-    if (newChild instanceof HTMLElement) {
-      const key = newChild.getAttribute("data-key");
-      if (key && oldKeyed.has(key)) {
-        const oldChild = oldKeyed.get(key)!;
-        patchElement(oldChild as HTMLElement, newChild as HTMLElement);
-        newNodes.push(oldChild);
-        oldKeyed.delete(key);
-        continue;
-      }
-    }
-    newNodes.push(newChild.cloneNode(true));
-  }
-
-  // Remove old keyed nodes not in new children
-  oldKeyed.forEach((node) => {
-    oldEl.removeChild(node);
-  });
-
-  // Now insert/reorder nodes
-  let cursor = oldEl.firstChild;
-  newNodes.forEach((node) => {
-    if (node !== cursor) {
-      oldEl.insertBefore(node, cursor);
-    }
-    cursor = node.nextSibling;
-  });
-
-  // Remove excess old children
-  while (cursor && cursor !== oldEl.lastChild?.nextSibling) {
-    const next = cursor.nextSibling;
-    oldEl.removeChild(cursor);
-    cursor = next;
-  }
-}
-
-// --- createElement updated to support data-key and reactive children with cleanup ---
 type ElementChild = string | number | boolean | HTMLElement | (() => ElementChild);
 
 type StyleObject = {
