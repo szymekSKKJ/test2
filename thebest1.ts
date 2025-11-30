@@ -190,6 +190,33 @@ const createElement = <T extends keyof HTMLElementTagNameMap>(tag: T, props: Ele
   return element;
 };
 
+type SignalGetter<T> = () => T;
+
+function useRffect(callback: () => void, dependencies: SignalGetter<any>[]) {
+  let prevValues: any[] = [];
+
+  let isInitialRun = true;
+
+  const reactiveFunction = () => {
+    const currentValues = dependencies.map((dep) => dep());
+
+    if (!isInitialRun) {
+      const dependenciesChanged = currentValues.some((current, i) => !Object.is(current, prevValues[i]));
+
+      if (!dependenciesChanged) {
+        return;
+      }
+    }
+
+    callback();
+
+    prevValues = currentValues;
+    isInitialRun = false;
+  };
+
+  subscribe(reactiveFunction);
+}
+
 const [getValue, setValue] = signal(0);
 const [getValue1, setValue1] = signal(0);
 
@@ -211,6 +238,10 @@ const [getValues, setValues] = signal([
     value: 0,
   },
 ]);
+
+useRffect(() => {
+  console.log(getValue());
+}, [getValue]);
 
 const a = createElement(
   "div",
