@@ -1,0 +1,19 @@
+Option 2: Use Babel with TypeScript preset
+
+Babel can strip types from TypeScript without doing other transformations (unless you tell it to).
+
+Install Babel and TypeScript preset:
+
+npm install --save-dev @babel/core @babel/cli @babel/preset-typescript
+
+
+Create a .babelrc or babel.config.json:
+
+{
+  "presets": ["@babel/preset-typescript"]
+}
+
+
+Run Babel to transpile:
+
+npx babel src --out-dir dist --extensions ".ts,.tsx"
