@@ -262,7 +262,7 @@ export const createElement = <T extends keyof HTMLElementTagNameMap>(tag: T, pro
 
 type SignalGetter<T> = () => T;
 
-export const useRffect = (callback: () => void, dependencies: SignalGetter<any>[]) => {
+export const useEffect = (callback: () => void, dependencies: SignalGetter<any>[]) => {
   let prevValues: any[] = [];
 
   let isInitialRun = true;
@@ -285,4 +285,16 @@ export const useRffect = (callback: () => void, dependencies: SignalGetter<any>[
   };
 
   subscribe(reactiveFunction);
+};
+
+export const useFetch = <T>(callback: () => Promise<T>) => {
+  const [getReturn, setReturn] = signal<[string, null | T]>(["pending", null]);
+
+  (async () => {
+    const response = await callback();
+
+    setReturn(["resolved", response]);
+  })();
+
+  return getReturn;
 };

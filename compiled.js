@@ -195,7 +195,7 @@ export const createElement = (tag, props, children = []) => {
   children.forEach(appendChildRecursive);
   return element;
 };
-export const useRffect = (callback, dependencies) => {
+export const useEffect = (callback, dependencies) => {
   let prevValues = [];
   let isInitialRun = true;
   const reactiveFunction = () => {
@@ -211,4 +211,12 @@ export const useRffect = (callback, dependencies) => {
     isInitialRun = false;
   };
   subscribe(reactiveFunction);
+};
+export const useFetch = callback => {
+  const [getReturn, setReturn] = signal(["pending", null]);
+  (async () => {
+    const response = await callback();
+    setReturn(["resolved", response]);
+  })();
+  return getReturn;
 };
