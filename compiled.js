@@ -1,8 +1,8 @@
 let currentComputation = null;
-function subscribe(fn) {
+const subscribe = fn => {
   const computation = {
     fn,
-    deps: new Set(),
+    deps: new Set()
   };
   function run() {
     cleanup(computation);
@@ -16,19 +16,19 @@ function subscribe(fn) {
   }
   run();
   return computation;
-}
-function cleanup(computation) {
-  computation.deps.forEach((depSet) => depSet.delete(computation));
+};
+const cleanup = computation => {
+  computation.deps.forEach(depSet => depSet.delete(computation));
   computation.deps.clear();
-}
+};
 const updateQueue = new Set();
 let isFlushing = false;
-function enqueueUpdate(comp) {
+const enqueueUpdate = comp => {
   updateQueue.add(comp);
   if (!isFlushing) {
     isFlushing = true;
     queueMicrotask(() => {
-      updateQueue.forEach((c) => {
+      updateQueue.forEach(c => {
         try {
           c.fn();
         } catch (e) {
@@ -39,10 +39,10 @@ function enqueueUpdate(comp) {
       isFlushing = false;
     });
   }
-}
-export const signal = (initialValue) => {
+};
+export const signal = initialValue => {
   const state = {
-    value: initialValue,
+    value: initialValue
   };
   const subscribers = new Set();
   const get = () => {
@@ -52,33 +52,40 @@ export const signal = (initialValue) => {
     }
     return state.value;
   };
-  const set = (newValue) => {
-    if (Object.is(newValue, state.value)) return;
-    state.value = newValue;
+  const set = newValue => {
+    if (Object.is(newValue, state.value) === false) {
+      if (typeof newValue === "function") {
+        state.value = newValue(state.value);
+      } else {
+        state.value = newValue;
+      }
+    }
     subscribers.forEach(enqueueUpdate);
   };
   return [get, set];
 };
 export const createElement = (tag, props, children = []) => {
   const element = document.createElement(tag);
+  const key = props.key;
+  delete props.key;
+  if (key !== null && key !== undefined) {
+    // @ts-ignore
+    element._key = key;
+  }
   Object.entries(props).forEach(([key, value]) => {
     if (key.startsWith("on") === true && typeof value === "function") {
       const [, eventName] = key.split("on");
       element.addEventListener(eventName.toLowerCase(), value);
     } else if (key === "class") {
       const attach = () => {
-        const classArray = (typeof value === "string" ? value : value())
-          .trim()
-          .replace(/\s+/g, " ")
-          .split(" ")
-          .filter((name) => name.trim().length > 0);
+        const classArray = (typeof value === "string" ? value : value()).trim().replace(/\s+/g, " ").split(" ").filter(name => name.trim().length > 0);
         const desiredClasses = new Set(classArray);
-        Array.from(element.classList).forEach((className) => {
+        Array.from(element.classList).forEach(className => {
           if (desiredClasses.has(className) === false) {
             element.classList.remove(className);
           }
         });
-        desiredClasses.forEach((className) => {
+        desiredClasses.forEach(className => {
           element.classList.add(className);
         });
       };
@@ -123,14 +130,56 @@ export const createElement = (tag, props, children = []) => {
       }
     }
   });
-  const appendChildRecursive = (child) => {
+  const appendChildRecursive = child => {
     if (child == null) return;
     if (typeof child === "function") {
-      const nodeOrEl = child();
-      if (nodeOrEl instanceof HTMLElement || nodeOrEl instanceof Text) {
-        element.appendChild(nodeOrEl);
+      const nodeOrElementOrArray = child();
+      if (Array.isArray(nodeOrElementOrArray)) {
+        const placeholder = document.createTextNode("");
+        element.appendChild(placeholder);
+        let nodeCache = new Map();
+        let mountedNodes = [];
+        subscribe(() => {
+          const newCandidates = nodeOrElementOrArray.map(val => {
+            if (val instanceof Node) return val;
+            return document.createTextNode(String(val));
+          });
+          const nextNodeCache = new Map();
+          const finalNodes = [];
+          newCandidates.forEach(candidate => {
+            // @ts-ignore
+            const candidateKey = candidate._key;
+            if (candidateKey != null) {
+              let nodeToUse = candidate;
+              if (nodeCache.has(candidateKey)) {
+                nodeToUse = nodeCache.get(candidateKey);
+              }
+              nextNodeCache.set(candidateKey, nodeToUse);
+              finalNodes.push(nodeToUse);
+            } else {
+              finalNodes.push(candidate);
+            }
+          });
+          const finalNodeSet = new Set(finalNodes);
+          mountedNodes.forEach(node => {
+            if (!finalNodeSet.has(node)) {
+              node.remove();
+            }
+          });
+          let currentRef = placeholder;
+          finalNodes.forEach(node => {
+            if (currentRef.nextSibling !== node) {
+              currentRef.after(node);
+            }
+            currentRef = node;
+          });
+          mountedNodes = finalNodes;
+          nodeCache = nextNodeCache;
+        });
+      } else if (nodeOrElementOrArray instanceof HTMLElement || nodeOrElementOrArray instanceof Text) {
+        element.appendChild(nodeOrElementOrArray);
       } else {
-        const textNode = document.createTextNode(String(nodeOrEl));
+        const textNode = document.createTextNode(String(nodeOrElementOrArray));
         element.appendChild(textNode);
         subscribe(() => {
           const next = child();
@@ -146,12 +195,11 @@ export const createElement = (tag, props, children = []) => {
   children.forEach(appendChildRecursive);
   return element;
 };
-
-export function useRffect(callback, dependencies) {
+export const useRffect = (callback, dependencies) => {
   let prevValues = [];
   let isInitialRun = true;
   const reactiveFunction = () => {
-    const currentValues = dependencies.map((dep) => dep());
+    const currentValues = dependencies.map(dep => dep());
     if (!isInitialRun) {
       const dependenciesChanged = currentValues.some((current, i) => !Object.is(current, prevValues[i]));
       if (!dependenciesChanged) {
@@ -163,4 +211,4 @@ export function useRffect(callback, dependencies) {
     isInitialRun = false;
   };
   subscribe(reactiveFunction);
-}
+};
