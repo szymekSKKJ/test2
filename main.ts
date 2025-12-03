@@ -13,7 +13,7 @@ type Computation = {
         if (node._createElement === true) {
           if (type === "mount") {
             if (node._onMount !== undefined && typeof node._onMount === "function") {
-              node._onMount(this);
+              node._onMount(node);
             }
           }
 
@@ -34,7 +34,7 @@ type Computation = {
 
         if (type === "unmount") {
           if (this._onUnmount !== undefined && typeof this._onUnmount === "function") {
-            this.onUnmount(this);
+            this._onUnmount(this);
           }
         }
       }
@@ -47,12 +47,15 @@ type Computation = {
   patchMethod(Node.prototype, "insertBefore", "mount");
   patchMethod(Node.prototype, "replaceChild", "mount");
   patchMethod(Node.prototype, "removeChild", "unmount");
+  patchMethod(Node.prototype, "after", "mount");
+
+  patchMethod(Text.prototype, "remove", "unmount");
+  patchMethod(Text.prototype, "after", "mount");
 
   patchMethod(Element.prototype, "remove", "unmount");
-  patchMethod(Text.prototype, "remove", "unmount");
-
   patchMethod(Element.prototype, "prepend", "mount");
   patchMethod(Element.prototype, "append", "mount");
+  patchMethod(Element.prototype, "after", "mount");
 })();
 
 let currentComputation: Computation | null = null;
@@ -173,7 +176,7 @@ export const createElement = <T extends keyof HTMLElementTagNameMap>(tag: T, pro
       element.addEventListener(eventName.toLowerCase(), value);
     } else if (key === "class") {
       const attach = () => {
-        const classArray: string[] = ((typeof value === "string" ? value : value()).trim().replace(/\s+/g, " ").split(" ") as string[]).filter(
+        const classArray: string[] = ((typeof value === "string" ? value : value(element)).trim().replace(/\s+/g, " ").split(" ") as string[]).filter(
           (name) => name.trim().length > 0
         );
         const desiredClasses = new Set(classArray);
@@ -197,7 +200,7 @@ export const createElement = <T extends keyof HTMLElementTagNameMap>(tag: T, pro
       }
     } else if (key === "style") {
       const attach = () => {
-        Object.entries(typeof value === "object" ? value : value()).forEach(([key, val]) => {
+        Object.entries(typeof value === "object" ? value : value(element)).forEach(([key, val]) => {
           const cssProp = key.replace(/([A-Z])/g, "-$1").toLowerCase();
           const current = element.style.getPropertyValue(cssProp);
           if (val === null || val === undefined || val === false) {
@@ -224,7 +227,7 @@ export const createElement = <T extends keyof HTMLElementTagNameMap>(tag: T, pro
     } else {
       if (typeof value === "function") {
         subscribe(() => {
-          element.setAttribute(key, value());
+          element.setAttribute(key, value(element));
         });
       } else {
         element.setAttribute(key, value);
@@ -259,7 +262,7 @@ export const createElement = <T extends keyof HTMLElementTagNameMap>(tag: T, pro
             // @ts-ignore
             const candidateKey = candidate._key;
 
-            if (candidateKey != null) {
+            if (candidateKey !== null && candidateKey !== undefined) {
               let nodeToUse = candidate;
 
               if (nodeCache.has(candidateKey)) {
