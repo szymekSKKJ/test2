@@ -3,6 +3,58 @@ type Computation = {
   deps: Set<Set<Computation>>;
 };
 
+(function () {
+  function patchMethod(proto: any, methodName: string, type: "mount" | "unmount") {
+    if (!proto || !proto[methodName]) return;
+
+    const original = proto[methodName];
+    proto[methodName] = function (...args: any[]) {
+      args.forEach((node) => {
+        if (node._createElement === true) {
+          if (type === "mount") {
+            if (node._onMount !== undefined && typeof node._onMount === "function") {
+              node._onMount(this);
+            }
+          }
+
+          // if (type === "unmount") {
+          //   if (this._onUnmount !== undefined && typeof this._onUnmount === "function") {
+          //     this.onUnmount(this);
+          //   }
+          // }
+        }
+      });
+
+      if (this._createElement === true) {
+        // if (type === "mount") {
+        //   if (this._onMount !== undefined && typeof this._onMount === "function") {
+        //     this._onMount(this);
+        //   }
+        // }
+
+        if (type === "unmount") {
+          if (this._onUnmount !== undefined && typeof this._onUnmount === "function") {
+            this.onUnmount(this);
+          }
+        }
+      }
+
+      return original.apply(this, args);
+    };
+  }
+
+  patchMethod(Node.prototype, "appendChild", "mount");
+  patchMethod(Node.prototype, "insertBefore", "mount");
+  patchMethod(Node.prototype, "replaceChild", "mount");
+  patchMethod(Node.prototype, "removeChild", "unmount");
+
+  patchMethod(Element.prototype, "remove", "unmount");
+  patchMethod(Text.prototype, "remove", "unmount");
+
+  patchMethod(Element.prototype, "prepend", "mount");
+  patchMethod(Element.prototype, "append", "mount");
+})();
+
 let currentComputation: Computation | null = null;
 
 const subscribe = (fn: () => void) => {
@@ -92,6 +144,8 @@ type StyleObject = {
 type ElementProps<T extends keyof HTMLElementTagNameMap> = Omit<Partial<HTMLElementTagNameMap[T]>, "style"> & {
   style?: StyleObject | (() => StyleObject);
   className?: string | (() => string);
+  onMount?: (element: ElementChild) => void;
+  onUnmount?: (element: ElementChild) => void;
   "data-key"?: string;
 } & Record<string, any>;
 
@@ -106,8 +160,15 @@ export const createElement = <T extends keyof HTMLElementTagNameMap>(tag: T, pro
     element._key = key;
   }
 
+  // @ts-ignore
+  element._createElement = true;
+
   Object.entries(props).forEach(([key, value]) => {
-    if (key.startsWith("on") === true && typeof value === "function") {
+    if (key === "onMount") {
+      (element as any)._onMount = value;
+    } else if (key === "onUnmount") {
+      (element as any)._onUnmount = value;
+    } else if (key.startsWith("on") === true && typeof value === "function") {
       const [, eventName] = key.split("on");
       element.addEventListener(eventName.toLowerCase(), value);
     } else if (key === "class") {
@@ -250,7 +311,9 @@ export const createElement = <T extends keyof HTMLElementTagNameMap>(tag: T, pro
 
     element.appendChild(document.createTextNode(String(child)));
   };
+
   children.forEach(appendChildRecursive);
+
   return element;
 };
 

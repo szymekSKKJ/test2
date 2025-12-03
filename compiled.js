@@ -1,3 +1,48 @@
+(function () {
+  function patchMethod(proto, methodName, type) {
+    if (!proto || !proto[methodName]) return;
+    const original = proto[methodName];
+    proto[methodName] = function (...args) {
+      args.forEach(node => {
+        if (node._createElement === true) {
+          if (type === "mount") {
+            if (node._onMount !== undefined && typeof node._onMount === "function") {
+              node._onMount(this);
+            }
+          }
+
+          // if (type === "unmount") {
+          //   if (this._onUnmount !== undefined && typeof this._onUnmount === "function") {
+          //     this.onUnmount(this);
+          //   }
+          // }
+        }
+      });
+      if (this._createElement === true) {
+        // if (type === "mount") {
+        //   if (this._onMount !== undefined && typeof this._onMount === "function") {
+        //     this._onMount(this);
+        //   }
+        // }
+
+        if (type === "unmount") {
+          if (this._onUnmount !== undefined && typeof this._onUnmount === "function") {
+            this.onUnmount(this);
+          }
+        }
+      }
+      return original.apply(this, args);
+    };
+  }
+  patchMethod(Node.prototype, "appendChild", "mount");
+  patchMethod(Node.prototype, "insertBefore", "mount");
+  patchMethod(Node.prototype, "replaceChild", "mount");
+  patchMethod(Node.prototype, "removeChild", "unmount");
+  patchMethod(Element.prototype, "remove", "unmount");
+  patchMethod(Text.prototype, "remove", "unmount");
+  patchMethod(Element.prototype, "prepend", "mount");
+  patchMethod(Element.prototype, "append", "mount");
+})();
 let currentComputation = null;
 const subscribe = fn => {
   const computation = {
@@ -72,8 +117,15 @@ export const createElement = (tag, props, children = []) => {
     // @ts-ignore
     element._key = key;
   }
+
+  // @ts-ignore
+  element._createElement = true;
   Object.entries(props).forEach(([key, value]) => {
-    if (key.startsWith("on") === true && typeof value === "function") {
+    if (key === "onMount") {
+      element._onMount = value;
+    } else if (key === "onUnmount") {
+      element._onUnmount = value;
+    } else if (key.startsWith("on") === true && typeof value === "function") {
       const [, eventName] = key.split("on");
       element.addEventListener(eventName.toLowerCase(), value);
     } else if (key === "class") {
