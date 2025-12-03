@@ -246,3 +246,9 @@ export const useFetch = (callback) => {
   })();
   return getReturn;
 };
+
+export const useRef = (initialValue = null) => {
+  return {
+    current: initialValue,
+  };
+};
