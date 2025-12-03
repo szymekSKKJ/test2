@@ -109,16 +109,12 @@ export const createElement = <T extends keyof HTMLElementTagNameMap>(tag: T, pro
   Object.entries(props).forEach(([key, value]) => {
     if (key.startsWith("on") === true && typeof value === "function") {
       const [, eventName] = key.split("on");
-
       element.addEventListener(eventName.toLowerCase(), value);
     } else if (key === "class") {
       const attach = () => {
-        const classArray: string[] = (typeof value === "string" ? value : value())
-          .trim()
-          .replace(/\s+/g, " ")
-          .split(" ")
-          .filter((name: string) => name.trim().length > 0);
-
+        const classArray: string[] = ((typeof value === "string" ? value : value()).trim().replace(/\s+/g, " ").split(" ") as string[]).filter(
+          (name) => name.trim().length > 0
+        );
         const desiredClasses = new Set(classArray);
 
         Array.from(element.classList).forEach((className) => {
@@ -131,7 +127,6 @@ export const createElement = <T extends keyof HTMLElementTagNameMap>(tag: T, pro
           element.classList.add(className);
         });
       };
-
       if (typeof value === "function") {
         subscribe(() => {
           attach();
@@ -143,16 +138,13 @@ export const createElement = <T extends keyof HTMLElementTagNameMap>(tag: T, pro
       const attach = () => {
         Object.entries(typeof value === "object" ? value : value()).forEach(([key, val]) => {
           const cssProp = key.replace(/([A-Z])/g, "-$1").toLowerCase();
-
           const current = element.style.getPropertyValue(cssProp);
-
           if (val === null || val === undefined || val === false) {
             if (current) {
               element.style.removeProperty(cssProp);
             }
           } else {
             const newVal = String(val);
-
             if (current !== newVal) {
               element.style.setProperty(cssProp, newVal);
             }
@@ -166,6 +158,8 @@ export const createElement = <T extends keyof HTMLElementTagNameMap>(tag: T, pro
           attach();
         });
       }
+    } else if (key === "ref" && typeof value === "function") {
+      value(element);
     } else {
       if (typeof value === "function") {
         subscribe(() => {
@@ -178,20 +172,21 @@ export const createElement = <T extends keyof HTMLElementTagNameMap>(tag: T, pro
   });
 
   const appendChildRecursive = (child: ElementChild) => {
-    if (child == null) return;
+    if (child === null || child === undefined) return;
 
     if (typeof child === "function") {
-      const nodeOrElementOrArray = child();
+      const placeholder = document.createTextNode("");
+      element.appendChild(placeholder);
 
-      if (Array.isArray(nodeOrElementOrArray)) {
-        const placeholder = document.createTextNode("");
-        element.appendChild(placeholder);
+      let nodeCache = new Map();
+      let mountedNodes: (HTMLElement | Text)[] = [];
 
-        let nodeCache = new Map();
-        let mountedNodes: (HTMLElement | Text)[] = [];
+      const render = () => {
+        const value = child();
 
-        subscribe(() => {
-          const newCandidates = nodeOrElementOrArray.map((val) => {
+        if (value !== undefined) {
+          const rawNodes = Array.isArray(value) ? value : [value];
+          const newCandidates = rawNodes.map((val) => {
             if (val instanceof Node) return val;
             return document.createTextNode(String(val));
           });
@@ -236,27 +231,26 @@ export const createElement = <T extends keyof HTMLElementTagNameMap>(tag: T, pro
 
           mountedNodes = finalNodes;
           nodeCache = nextNodeCache;
-        });
-      } else if (nodeOrElementOrArray instanceof HTMLElement || nodeOrElementOrArray instanceof Text) {
-        element.appendChild(nodeOrElementOrArray);
-      } else {
-        const textNode = document.createTextNode(String(nodeOrElementOrArray));
-        element.appendChild(textNode);
+        }
+      };
 
-        subscribe(() => {
-          const next = child();
-          textNode.textContent = String(next);
-        });
-      }
-    } else if (child instanceof Node) {
-      element.appendChild(child);
-    } else {
-      element.appendChild(document.createTextNode(String(child)));
+      subscribe(render);
+      return;
     }
+
+    if (Array.isArray(child)) {
+      child.forEach(appendChildRecursive);
+      return;
+    }
+
+    if (child instanceof Node) {
+      element.appendChild(child);
+      return;
+    }
+
+    element.appendChild(document.createTextNode(String(child)));
   };
-
   children.forEach(appendChildRecursive);
-
   return element;
 };
 
@@ -297,4 +291,10 @@ export const useFetch = <T>(callback: () => Promise<T>) => {
   })();
 
   return getReturn;
+};
+
+export const useRef = <T>(initialValue: T | null = null) => {
+  return {
+    current: initialValue,
+  };
 };

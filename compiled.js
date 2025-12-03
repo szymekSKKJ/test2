@@ -120,6 +120,8 @@ export const createElement = (tag, props, children = []) => {
           attach();
         });
       }
+    } else if (key === "ref" && typeof value === "function") {
+      value(element);
     } else {
       if (typeof value === "function") {
         subscribe(() => {
@@ -131,16 +133,17 @@ export const createElement = (tag, props, children = []) => {
     }
   });
   const appendChildRecursive = child => {
-    if (child == null) return;
+    if (child === null || child === undefined) return;
     if (typeof child === "function") {
-      const nodeOrElementOrArray = child();
-      if (Array.isArray(nodeOrElementOrArray)) {
-        const placeholder = document.createTextNode("");
-        element.appendChild(placeholder);
-        let nodeCache = new Map();
-        let mountedNodes = [];
-        subscribe(() => {
-          const newCandidates = nodeOrElementOrArray.map(val => {
+      const placeholder = document.createTextNode("");
+      element.appendChild(placeholder);
+      let nodeCache = new Map();
+      let mountedNodes = [];
+      const render = () => {
+        const value = child();
+        if (value !== undefined) {
+          const rawNodes = Array.isArray(value) ? value : [value];
+          const newCandidates = rawNodes.map(val => {
             if (val instanceof Node) return val;
             return document.createTextNode(String(val));
           });
@@ -175,22 +178,20 @@ export const createElement = (tag, props, children = []) => {
           });
           mountedNodes = finalNodes;
           nodeCache = nextNodeCache;
-        });
-      } else if (nodeOrElementOrArray instanceof HTMLElement || nodeOrElementOrArray instanceof Text) {
-        element.appendChild(nodeOrElementOrArray);
-      } else {
-        const textNode = document.createTextNode(String(nodeOrElementOrArray));
-        element.appendChild(textNode);
-        subscribe(() => {
-          const next = child();
-          textNode.textContent = String(next);
-        });
-      }
-    } else if (child instanceof Node) {
-      element.appendChild(child);
-    } else {
-      element.appendChild(document.createTextNode(String(child)));
+        }
+      };
+      subscribe(render);
+      return;
     }
+    if (Array.isArray(child)) {
+      child.forEach(appendChildRecursive);
+      return;
+    }
+    if (child instanceof Node) {
+      element.appendChild(child);
+      return;
+    }
+    element.appendChild(document.createTextNode(String(child)));
   };
   children.forEach(appendChildRecursive);
   return element;
@@ -219,4 +220,9 @@ export const useFetch = callback => {
     setReturn(["resolved", response]);
   })();
   return getReturn;
+};
+export const useRef = (initialValue = null) => {
+  return {
+    current: initialValue
+  };
 };
