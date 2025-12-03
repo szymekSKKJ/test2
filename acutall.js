@@ -125,6 +125,8 @@ export const createElement = (tag, props, children = []) => {
           attach();
         });
       }
+    } else if (key === "ref" && typeof value === "function") {
+      value(element);
     } else {
       if (typeof value === "function") {
         subscribe(() => {
