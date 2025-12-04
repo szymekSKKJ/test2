@@ -282,7 +282,26 @@ export const useFetch = (callback) => {
   return getReturn;
 };
 export const useRef = (initialValue = null) => {
-  return {
-    current: initialValue,
-  };
+  // const [getValue, setValue] = signal(initialValue);
+
+  // const target = {
+  //   current: initialValue,
+  //   _currentGet
+  // };
+
+  // const proxy = new Proxy(target, {
+  //   get(value, prop) {
+  //     console.log(value);
+  //     getValue();
+  //     return value;
+  //   },
+  //   set(obj, prop, value) {
+  //     setValue(value);
+  //     return {
+  //       current: value,
+  //     };
+  //   },
+  // });
+
+  return { current: initialValue };
 };
