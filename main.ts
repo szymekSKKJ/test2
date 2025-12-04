@@ -16,22 +16,10 @@ type Computation = {
               node._onMount(node);
             }
           }
-
-          // if (type === "unmount") {
-          //   if (this._onUnmount !== undefined && typeof this._onUnmount === "function") {
-          //     this.onUnmount(this);
-          //   }
-          // }
         }
       });
 
       if (this._createElement === true) {
-        // if (type === "mount") {
-        //   if (this._onMount !== undefined && typeof this._onMount === "function") {
-        //     this._onMount(this);
-        //   }
-        // }
-
         if (type === "unmount") {
           if (this._onUnmount !== undefined && typeof this._onUnmount === "function") {
             this._onUnmount(this);
@@ -320,7 +308,7 @@ export const createElement = <T extends keyof HTMLElementTagNameMap>(tag: T, pro
   return element;
 };
 
-type SignalGetter<T> = () => T;
+type SignalGetter<T> = (() => T) | { current: T };
 
 export const useEffect = (callback: () => void, dependencies: SignalGetter<any>[]) => {
   let prevValues: any[] = [];
@@ -328,7 +316,8 @@ export const useEffect = (callback: () => void, dependencies: SignalGetter<any>[
   let isInitialRun = true;
 
   const reactiveFunction = () => {
-    const currentValues = dependencies.map((dep) => dep());
+    // @ts-ignore
+    const currentValues = dependencies.map((dep) => (typeof dep === "function" ? dep() : Object.hasOwn(dep, "current") ? dep.signal() : undefined));
 
     if (!isInitialRun) {
       const dependenciesChanged = currentValues.some((current, i) => !Object.is(current, prevValues[i]));
@@ -359,8 +348,27 @@ export const useFetch = <T>(callback: () => Promise<T>) => {
   return getReturn;
 };
 
-export const useRef = <T>(initialValue: T | null = null) => {
-  return {
+export const useRef = <T>(initialValue: T) => {
+  const [getValue, setValue] = signal(initialValue);
+
+  const target = {
     current: initialValue,
   };
+
+  const proxy = new Proxy(target, {
+    get(value, property) {
+      getValue();
+
+      return property === "current" ? value.current : property === "signal" ? getValue : value.current;
+    },
+    set(obj, prop, value) {
+      setValue(value);
+
+      obj[prop as keyof typeof obj] = value;
+
+      return true;
+    },
+  });
+
+  return proxy;
 };

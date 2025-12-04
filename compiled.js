@@ -10,21 +10,9 @@
               node._onMount(node);
             }
           }
-
-          // if (type === "unmount") {
-          //   if (this._onUnmount !== undefined && typeof this._onUnmount === "function") {
-          //     this.onUnmount(this);
-          //   }
-          // }
         }
       });
       if (this._createElement === true) {
-        // if (type === "mount") {
-        //   if (this._onMount !== undefined && typeof this._onMount === "function") {
-        //     this._onMount(this);
-        //   }
-        // }
-
         if (type === "unmount") {
           if (this._onUnmount !== undefined && typeof this._onUnmount === "function") {
             this._onUnmount(this);
@@ -255,7 +243,8 @@ export const useEffect = (callback, dependencies) => {
   let prevValues = [];
   let isInitialRun = true;
   const reactiveFunction = () => {
-    const currentValues = dependencies.map(dep => dep());
+    // @ts-ignore
+    const currentValues = dependencies.map(dep => typeof dep === "function" ? dep() : Object.hasOwn(dep, "current") ? dep.signal() : undefined);
     if (!isInitialRun) {
       const dependenciesChanged = currentValues.some((current, i) => !Object.is(current, prevValues[i]));
       if (!dependenciesChanged) {
@@ -276,8 +265,21 @@ export const useFetch = callback => {
   })();
   return getReturn;
 };
-export const useRef = (initialValue = null) => {
-  return {
+export const useRef = initialValue => {
+  const [getValue, setValue] = signal(initialValue);
+  const target = {
     current: initialValue
   };
+  const proxy = new Proxy(target, {
+    get(value, property) {
+      getValue();
+      return property === "current" ? value.current : property === "signal" ? getValue : value.current;
+    },
+    set(obj, prop, value) {
+      setValue(value);
+      obj[prop] = value;
+      return true;
+    }
+  });
+  return proxy;
 };
