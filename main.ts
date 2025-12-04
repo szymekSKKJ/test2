@@ -8,26 +8,31 @@ type Computation = {
     if (!proto || !proto[methodName]) return;
 
     const original = proto[methodName];
+
     proto[methodName] = function (...args: any[]) {
-      args.forEach((node) => {
-        if (node._createElement === true) {
-          if (type === "mount") {
-            if (node._onMount !== undefined && typeof node._onMount === "function") {
-              node._onMount(node);
+      if (type === "mount") {
+        original.apply(this, args);
+
+        args.forEach((node) => {
+          if (node._createElement === true) {
+            if (type === "mount") {
+              if (node._onMount !== undefined && typeof node._onMount === "function") {
+                node._onMount(node);
+              }
+            }
+          }
+        });
+      } else {
+        if (this._createElement === true) {
+          if (type === "unmount") {
+            if (this._onUnmount !== undefined && typeof this._onUnmount === "function") {
+              this._onUnmount(this);
             }
           }
         }
-      });
 
-      if (this._createElement === true) {
-        if (type === "unmount") {
-          if (this._onUnmount !== undefined && typeof this._onUnmount === "function") {
-            this._onUnmount(this);
-          }
-        }
+        original.apply(this, args);
       }
-
-      return original.apply(this, args);
     };
   }
 
